@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Threading;
 using Microsoft.Kinect;
 using Microsoft.Kinect.Toolkit.BackgroundRemoval;
@@ -157,20 +160,29 @@ namespace KinectVJ
             // create Spout sender
             _spoutSender = new SpoutSender();
             _spoutSender.CreateSender("KinectSpoutSender", 640, 480, 0);
+            
+            // Create Bitmap for locking in image before sending
+            Bitmap _bitmap = new Bitmap(640, 480, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
             Console.WriteLine("Streaming...");
 
             // consume frames and send
             foreach (var frame in _frameQueue.GetConsumingEnumerable())
             {
+                // Lock bitmap in place
+                Rectangle rect = new Rectangle(0, 0, 640, 480);
+                var bmpData = _bitmap.LockBits(rect, ImageLockMode.WriteOnly, _bitmap.PixelFormat);
+                Marshal.Copy(frame, 0, bmpData.Scan0, frame.Length);
+                
                 unsafe
                 {
                     fixed (byte* p = frame)
                     {
                         _deviceContext.MakeCurrent(_glContext);
-                        _spoutSender.SendImage(p, 640, 480, Gl.BGRA, false, 0u);
+                        _spoutSender.SendImage((byte*)bmpData.Scan0, 640, 480, Gl.BGRA, false, 0u);
                     }
                 }
+                _bitmap.UnlockBits(bmpData);
             }
         }
         
