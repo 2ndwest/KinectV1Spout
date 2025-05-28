@@ -4,11 +4,21 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Threading;
-using System.Runtime.InteropServices;
 using Microsoft.Kinect;
 using Microsoft.Kinect.Toolkit.BackgroundRemoval;
 using Spout.Interop;
 using OpenGL;
+
+// Whoa Putz! For use on hall next year unless I can get ahold of a Kinect v2
+// If I can do that I'll write a TiXL integration and we can move past this junk
+// inb4 "code is shit" stfu. Putz is committed to overdesign. If it worked 100% it wouldn't be putz
+// If, for whatever reason it's past the year 2026 and this code is still in use:
+// 1. Get a Kinect v2, they're cheap now. My v1 was $5 at swapfest.
+// 2. Wtaf, that last sentence was autocompeted by AI, I didn't write that
+// 3. Kill James Randall (me) for not upgrading yet
+// 4. If I haven't graduated yet, get me to teach somebody how to maintain everything
+// 5. If I have graduated, reach out to me if you have any questions
+// jgrandall.73 on Signal (preferred), jgrandall@pm.me (email)
 
 namespace KinectVJ
 {
@@ -16,30 +26,28 @@ namespace KinectVJ
     {
         private bool _disposed;
 
+        // Basic Kinect Variables
         private KinectSensor _sensor;
+        private uint width = 640;
+        private uint height = 480;
+        private uint bytesPerPixel = 4; // BGRA format
         private BackgroundRemovedColorStream _backgroundRemovedColorStream;
-        private Skeleton[] _skeletons;
+        private Skeleton[] _skeletons; // Contains data of all skeletons tracked by Kinect
         private int _currentlyTrackedSkeletonId;
 
-        // Define stuff for OpenGL / Spout transmission
+        // Define stuff for OpenGL initialization
         private IntPtr _glContext;
         private static SpoutSender _spoutSender;
         private DeviceContext _deviceContext;
 
-        // Define stuff for the separate GL thread
+        // Create a separate thread for OpenGL and Spout
         private Thread _glThread;
+        // Also an array for storing frames to be sent over Spout
         private BlockingCollection<byte[]> _frameQueue = new BlockingCollection<byte[]>(boundedCapacity: 2);
 
-        // Super overkill global buffer system for queueing frames
         // The Spout C# wrapper has some memory management issues and this seems to help
-        private IntPtr _frameBufferPtr1 = IntPtr.Zero;
-        private IntPtr _frameBufferPtr2 = IntPtr.Zero;
-        private int _bufferLength = 640 * 480 * 4; // BGRA format
-        private volatile bool _useFirstBuffer = true; // which buffer to write next
+        private uint _bufferLength;
         private readonly AutoResetEvent _frameReadyEvent = new AutoResetEvent(false);
-        private volatile bool _stopRequested = false;  // signal for stopping GL thread
-
-        // Iterate through known Kinects and store active.
 
         public void Dispose()
         {
@@ -61,9 +69,10 @@ namespace KinectVJ
         private void StopStreaming()
         {
             // Wait for the GL Thread to finish and rejoin
-            _stopRequested = true;
             _frameQueue.CompleteAdding();
             _glThread?.Join();
+
+            // Get rid of everything
             if (_frameQueue != null) _frameQueue.Dispose();
 
             if (_backgroundRemovedColorStream != null)
@@ -72,6 +81,7 @@ namespace KinectVJ
                 _backgroundRemovedColorStream.Dispose();
                 _backgroundRemovedColorStream = null;
             }
+
             if (_sensor != null)
             { 
                 _sensor.AllFramesReady -= AllFramesReadyHandler;
@@ -83,6 +93,7 @@ namespace KinectVJ
                 _sensor.Dispose();
                 _sensor = null;
             }
+
             if (_deviceContext != null)
             {
                 _deviceContext.MakeCurrent(IntPtr.Zero);
@@ -100,23 +111,14 @@ namespace KinectVJ
                 _spoutSender = null;
             }
 
-            // Free unmanaged buffers
-            if (_frameBufferPtr1 != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(_frameBufferPtr1);
-                _frameBufferPtr1 = IntPtr.Zero;
-            }
-            if (_frameBufferPtr2 != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(_frameBufferPtr2);
-                _frameBufferPtr2 = IntPtr.Zero;
-            }
-
             // Brute force clean the shit out of everything
+            // Might make the memory problem with the C# wrapper a little bit better. Not sure :|
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
         }
+
+        // Attachto Kinect
         public void AttachToKinect()
         {
             foreach (var potentialSensor in KinectSensor.KinectSensors)
@@ -129,7 +131,6 @@ namespace KinectVJ
                 }
             }
 
-            // Raise exception if no connection
             if (this._sensor == null)
                 throw new InvalidOperationException("No Kinect Detected");
 
@@ -137,6 +138,7 @@ namespace KinectVJ
         }
 
         // Enable streaming from Kinect
+        // Turns on different sensors and stuff
         public void EnableKinect()
         { 
 
@@ -147,20 +149,19 @@ namespace KinectVJ
             _backgroundRemovedColorStream.Enable(
                 ColorImageFormat.RgbResolution640x480Fps30,
                 DepthImageFormat.Resolution640x480Fps30);
-
-            _skeletons = new Skeleton[_sensor.SkeletonStream.FrameSkeletonArrayLength];
-            Console.WriteLine("Skeletons list initialized");
-
         }
 
         // Begin streaming from Kinect
         public void BeginStreaming()
         {
-            Console.WriteLine("Initializing Streaming...");
-
             // Fire up the GL+Spout thread
             _glThread = new Thread(RunGlLoop) { IsBackground = true };
             _glThread.Start();
+            
+            // Create the skeletons array to hold the skeleton data
+            _skeletons = new Skeleton[_sensor.SkeletonStream.FrameSkeletonArrayLength];
+
+            _bufferLength = width * height * bytesPerPixel; // 640x480 image with 4 bytes per pixel (BGRA)
 
             // Add an event handler for when the removed background frame is ready
             _backgroundRemovedColorStream.BackgroundRemovedFrameReady += BackgroundRemovedFrameReadyHandler;
@@ -168,18 +169,15 @@ namespace KinectVJ
             // Add an event handler for when all frames are ready
             _sensor.AllFramesReady += AllFramesReadyHandler;
 
-            // Initialize the buffers to be the correct size for the Kinect frames
-            _frameBufferPtr1 = Marshal.AllocHGlobal(_bufferLength);
-            _frameBufferPtr2 = Marshal.AllocHGlobal(_bufferLength);
-            _stopRequested = false;
-
             _sensor.Start();
         }
 
         // Separately threaded process for sending frames over Spout
         private void RunGlLoop()
         {
-            // create & bind GL context
+            // The following runs once when the thread starts
+
+            // Create & bind GL context
             // Taken from example at https://github.com/Ruminoid/Spout.NET
             _deviceContext = DeviceContext.Create();
             _glContext = _deviceContext.CreateContext(IntPtr.Zero);
@@ -187,33 +185,20 @@ namespace KinectVJ
 
             // create Spout sender
             _spoutSender = new SpoutSender();
-            _spoutSender.CreateSender("KinectSpoutSender", 640, 480, 0);
+            _spoutSender.CreateSender("KinectSpoutSender", width, height, 0);
             
             // Create Bitmap for locking in image before sending
-            Bitmap _bitmap = new Bitmap(640, 480, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            Bitmap _bitmap = new Bitmap((int)width, (int)height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-            Console.WriteLine("Streaming...");
+            Console.WriteLine("Beginning to stream - press Ctrl + C at any point to quit.");
 
-            while (!_stopRequested)
-            { 
-                _frameReadyEvent.WaitOne(); // Wait for a new frame to be ready
-                if (_stopRequested) break; // Check if we should stop
-                // Choose appropriate buffer to use
-                IntPtr bufferToUse = _useFirstBuffer ? _frameBufferPtr1 : _frameBufferPtr2;
-
-                unsafe
-                {
-                    _deviceContext.MakeCurrent(_glContext);
-                    _spoutSender.SendImage((byte*)bufferToUse, 640, 480, Gl.BGRA, false, 0);
-                }
-            }
-
+            // The following runs indefinitely in the thread
 
             // Send frames from correct buffer
             foreach (var frame in _frameQueue.GetConsumingEnumerable())
             {
                 // Lock bitmap in place
-                Rectangle rect = new Rectangle(0, 0, 640, 480);
+                Rectangle rect = new Rectangle(0, 0, (int)width, (int)height);
                 var bmpData = _bitmap.LockBits(rect, ImageLockMode.WriteOnly, _bitmap.PixelFormat);
                 Marshal.Copy(frame, 0, bmpData.Scan0, frame.Length);
                 
@@ -228,8 +213,9 @@ namespace KinectVJ
                 _bitmap.UnlockBits(bmpData);
             }
         }
-        
-        // Process depth, color, skeleton data to remove background
+
+        // Called whenever a frame has had the background removed
+        // Writes it into the frame queue where it's picked up by the GL thread
         private void BackgroundRemovedFrameReadyHandler(object sender, BackgroundRemovedColorFrameReadyEventArgs e)
         {
             using (var frame = e.OpenBackgroundRemovedColorFrame())
@@ -239,18 +225,16 @@ namespace KinectVJ
                 byte[] managedBuffer = new byte[_bufferLength];
                 frame.CopyPixelDataTo(managedBuffer);
 
-                // Pick the buffer *not* being used by GL thread
-                IntPtr targetBuffer = _useFirstBuffer ? _frameBufferPtr2 : _frameBufferPtr1;
-
-                // Copy managed pixels to unmanaged buffer
-                Marshal.Copy(managedBuffer, 0, targetBuffer, _bufferLength);
-                
-                _useFirstBuffer = !_useFirstBuffer;
-                _frameReadyEvent.Set(); // Tell GlThread that a new frame is ready
-
+                try
+                {
+                    while (!_frameQueue.TryAdd(managedBuffer))
+                        _frameQueue.TryTake(out _);
+                }
+                catch (InvalidOperationException) { } // Occurs during dipose, can be swallowed.
             }
         } 
 
+        // Process depth, color, skeleton data to remove background
         private void AllFramesReadyHandler(object sender, AllFramesReadyEventArgs e)
         {
             try
@@ -282,11 +266,13 @@ namespace KinectVJ
                     catch (ArgumentNullException) 
                     { }
                 }
-                ChooseSkeleton();
+                ChooseSkeleton(); 
             }
             catch(InvalidOperationException) { }
         }
 
+        // Select which skeleton to track
+        // Lifted pretty much directly from the Kinect SDK example code
         private void ChooseSkeleton()
         {
             var isTrackedSkeltonVisible = false;
@@ -295,15 +281,9 @@ namespace KinectVJ
 
             foreach (var skel in _skeletons)
             {
-                if (null == skel)
-                {
-                    continue;
-                }
+                if (null == skel) continue;
 
-                if (skel.TrackingState != SkeletonTrackingState.Tracked)
-                {
-                    continue;
-                }
+                if (skel.TrackingState != SkeletonTrackingState.Tracked) continue;
 
                 if (skel.TrackingId == _currentlyTrackedSkeletonId)
                 {

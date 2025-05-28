@@ -31,3 +31,6 @@ C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\obj\x64\Release\KinectVJ.csproj.Up
 C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\obj\x64\Release\KinectVJ.exe
 C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\obj\x64\Release\KinectVJ.pdb
 C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\obj\x64\Release\KinectVJ.exe.config
+C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\bin\x64\Release\System.Drawing.Common.dll
+C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\bin\x64\Release\System.Drawing.Common.pdb
+C:\Users\Jamme\source\repos\KinectVJ\KinectVJ\bin\x64\Release\System.Drawing.Common.xml
