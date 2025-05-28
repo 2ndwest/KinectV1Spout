@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>CppSharp</id>
+    <version>0.10.5</version>
+    <authors>Dimitar Dobrev</authors>
+    <owners>Dimitar Dobrev,João Matos</owners>
+    <developmentDependency>true</developmentDependency>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>https://opensource.org/licenses/MIT</licenseUrl>
+    <projectUrl>https://github.com/mono/CppSharp</projectUrl>
+    <description>CppSharp is a tool and set of libraries which allows programmers to use C/C++ libraries with high-level programming languages (such as C#).
+
+It is a tool that takes C/C++ header and library files and generates the necessary glue to surface the native API as a managed API. Such an API can be used to consume an existing native library in your high-level code or add scripting support to a native codebase.
+
+The supported target languages at present are C# and C++/CLI.
+
+It can also be used as a library to parse native code into a syntax tree with a rich declaration and type information model.
+
+The NuGet version is Windows 64-bit only for the time being. Binary 32-bit releases for Windows can be found at https://github.com/mono/CppSharp/releases .</description>
+    <summary>CppSharp is a collection of libraries for working with C++ code from high-level languages.</summary>
+    <releaseNotes>* Don't add ABI-specific parameters when wrapping C
+
+* Prioritize public non-field properties when resolving naming conflicts
+
+* Fix patching of virtual tables for MSVC with RTTI
+
+* Free the memory of the patched v-tables
+
+* Fix parsing of member pointers with MSVC
+
+* Generate valid C# for constructors taking const&amp;
+
+* Generate valid C# for returned function pointers
+
+* Expose returned values of non-void setters
+
+* Ensure enumerations lack conflicts when renamed
+
+* Fix generation for fields of type const reference</releaseNotes>
+    <copyright>João Matos, Dimitar Dobrev</copyright>
+    <dependencies>
+      <dependency id="Baseclass.Contrib.Nuget.Output" version="2.4.3" />
+    </dependencies>
+  </metadata>
+</package>

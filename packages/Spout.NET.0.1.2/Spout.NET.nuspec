@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Spout.NET</id>
+    <version>0.1.2</version>
+    <title>Spout.NET</title>
+    <authors>Il Harper</authors>
+    <owners>Il Harper</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <icon>icon.png</icon>
+    <projectUrl>https://github.com/Ruminoid/Spout.NET</projectUrl>
+    <iconUrl>https://vbox.moe/Icons/Icons/HeavyWork/HeavyWork.Colored.Transparent.png</iconUrl>
+    <description>Spout.NET is a C# .NET Implementation for Spout2, A video frame sharing system.</description>
+    <copyright>Copyright Il Harper 2020</copyright>
+    <tags>Ruminoid Spout Spout2 Spout.NET</tags>
+    <dependencies>
+      <dependency id="Baseclass.Contrib.Nuget.Output" version="2.4.3" />
+      <dependency id="CppSharp" version="0.10.5" />
+      <dependency id="OpenGL.Net" version="0.8.4" />
+      <dependency id="System.Buffers" version="4.4.0" />
+      <dependency id="System.Memory" version="4.5.0" />
+      <dependency id="System.Numerics.Vectors" version="4.4.0" />
+      <dependency id="System.Runtime.CompilerServices.Unsafe" version="4.5.0" />
+    </dependencies>
+    <contentFiles>
+      <files include="**/*.*" buildAction="None" copyToOutput="true" flatten="false" />
+    </contentFiles>
+  </metadata>
+</package>
