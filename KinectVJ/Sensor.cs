@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Threading;
+using System.Runtime.InteropServices;
 using Microsoft.Kinect;
 using Microsoft.Kinect.Toolkit.BackgroundRemoval;
 using Spout.Interop;
@@ -29,6 +30,15 @@ namespace KinectVJ
         private Thread _glThread;
         private BlockingCollection<byte[]> _frameQueue = new BlockingCollection<byte[]>(boundedCapacity: 2);
 
+        // Super overkill global buffer system for queueing frames
+        // The Spout C# wrapper has some memory management issues and this seems to help
+        private IntPtr _frameBufferPtr1 = IntPtr.Zero;
+        private IntPtr _frameBufferPtr2 = IntPtr.Zero;
+        private int _bufferLength = 640 * 480 * 4; // BGRA format
+        private volatile bool _useFirstBuffer = true; // which buffer to write next
+        private readonly AutoResetEvent _frameReadyEvent = new AutoResetEvent(false);
+        private volatile bool _stopRequested = false;  // signal for stopping GL thread
+
         // Iterate through known Kinects and store active.
 
         public void Dispose()
@@ -51,6 +61,7 @@ namespace KinectVJ
         private void StopStreaming()
         {
             // Wait for the GL Thread to finish and rejoin
+            _stopRequested = true;
             _frameQueue.CompleteAdding();
             _glThread?.Join();
             if (_frameQueue != null) _frameQueue.Dispose();
@@ -87,6 +98,18 @@ namespace KinectVJ
                 _spoutSender.ReleaseSender(0u);
                 _spoutSender.Dispose();
                 _spoutSender = null;
+            }
+
+            // Free unmanaged buffers
+            if (_frameBufferPtr1 != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(_frameBufferPtr1);
+                _frameBufferPtr1 = IntPtr.Zero;
+            }
+            if (_frameBufferPtr2 != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(_frameBufferPtr2);
+                _frameBufferPtr2 = IntPtr.Zero;
             }
 
             // Brute force clean the shit out of everything
@@ -145,6 +168,11 @@ namespace KinectVJ
             // Add an event handler for when all frames are ready
             _sensor.AllFramesReady += AllFramesReadyHandler;
 
+            // Initialize the buffers to be the correct size for the Kinect frames
+            _frameBufferPtr1 = Marshal.AllocHGlobal(_bufferLength);
+            _frameBufferPtr2 = Marshal.AllocHGlobal(_bufferLength);
+            _stopRequested = false;
+
             _sensor.Start();
         }
 
@@ -166,7 +194,22 @@ namespace KinectVJ
 
             Console.WriteLine("Streaming...");
 
-            // consume frames and send
+            while (!_stopRequested)
+            { 
+                _frameReadyEvent.WaitOne(); // Wait for a new frame to be ready
+                if (_stopRequested) break; // Check if we should stop
+                // Choose appropriate buffer to use
+                IntPtr bufferToUse = _useFirstBuffer ? _frameBufferPtr1 : _frameBufferPtr2;
+
+                unsafe
+                {
+                    _deviceContext.MakeCurrent(_glContext);
+                    _spoutSender.SendImage((byte*)bufferToUse, 640, 480, Gl.BGRA, false, 0);
+                }
+            }
+
+
+            // Send frames from correct buffer
             foreach (var frame in _frameQueue.GetConsumingEnumerable())
             {
                 // Lock bitmap in place
@@ -193,17 +236,18 @@ namespace KinectVJ
             {
                 if (frame == null) return;
 
-                int bytesPerPixel = 4; // BGRA32
+                byte[] managedBuffer = new byte[_bufferLength];
+                frame.CopyPixelDataTo(managedBuffer);
 
-                byte[] buf = new byte[640 * 480 * bytesPerPixel];
-                frame.CopyPixelDataTo(buf);
-                try
-                {
-                    while (!_frameQueue.TryAdd(buf))
-                        _frameQueue.TryTake(out _);
-                }
-                catch (InvalidOperationException) { }
-                // The above occurs during dispose, fine to swallow
+                // Pick the buffer *not* being used by GL thread
+                IntPtr targetBuffer = _useFirstBuffer ? _frameBufferPtr2 : _frameBufferPtr1;
+
+                // Copy managed pixels to unmanaged buffer
+                Marshal.Copy(managedBuffer, 0, targetBuffer, _bufferLength);
+                
+                _useFirstBuffer = !_useFirstBuffer;
+                _frameReadyEvent.Set(); // Tell GlThread that a new frame is ready
+
             }
         } 
 
