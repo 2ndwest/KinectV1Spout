@@ -11,6 +11,9 @@ This is really only a temporary solution so I can develop VJ graphics until I ge
 
 If you have questions about it, feel free to message me or open an issue. Don't expect support or even for it to work really lol.
 
+**One other note**: If your system has multiple GPUs, you'll need to make sure that both your sender and your receiver are running on the same card.
+You can change this in your windows graphics settings, but I've had better luck forcing it with Nvidia Control Panel.
+
 This project depends on several other things I should give credit to:
 - spout.NET: https://github.com/Ruminoid/Spout.NET/ for the C# spout wrapper.
 - The Microsoft Kinect SDK: https://www.microsoft.com/en-us/download/details.aspx?id=44561 for the Kinect V1 SDK.
