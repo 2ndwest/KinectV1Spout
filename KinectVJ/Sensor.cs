@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -173,6 +174,7 @@ namespace KinectVJ
         }
 
         // Separately threaded process for sending frames over Spout
+        [HandleProcessCorruptedStateExceptions] 
         private void RunGlLoop()
         {
             // The following runs once when the thread starts
@@ -185,7 +187,15 @@ namespace KinectVJ
 
             // create Spout sender
             _spoutSender = new SpoutSender();
-            _spoutSender.CreateSender("KinectSpoutSender", width, height, 0);
+            try
+            {
+                _spoutSender.CreateSender("KinectSpoutSender", width, height, 0);
+            }
+            catch (AccessViolationException)
+            {
+                Console.WriteLine("Known memory issue - spam restart lmao.");
+                Dispose();
+            }
             
             // Create Bitmap for locking in image before sending
             Bitmap _bitmap = new Bitmap((int)width, (int)height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -207,7 +217,15 @@ namespace KinectVJ
                     fixed (byte* p = frame)
                     {
                         _deviceContext.MakeCurrent(_glContext);
-                        _spoutSender.SendImage((byte*)bmpData.Scan0, 640, 480, Gl.BGRA, false, 0u);
+                        try
+                        {
+                            _spoutSender.SendImage((byte*)bmpData.Scan0, 640, 480, Gl.BGRA, false, 0u);
+                        }
+                        catch (AccessViolationException)
+                        { 
+                            Console.WriteLine("Known memory issue - spam restart lmao.");
+                            Dispose();
+                        }
                     }
                 }
                 _bitmap.UnlockBits(bmpData);
