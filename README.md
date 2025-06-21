@@ -1,6 +1,6 @@
 ## Kinect V1 Spout Sender
 >**Note:** This program sucks! 50% of the time it works 50% of the time and for the love of god I can't do anything about it.
->The Kinect V1 SDK has been in the EOL since and it's busted as hell.
+>The Kinect V1 SDK has been in the EOL since and it's busted as hell. I've dragged it into 2025 kicking and screaming I guess.
 >This code is fugly as hell because I have to be an absolute fascist about last step memory management to stop it from exploding.
 >But I got a Kinect V1 for $5 at swapfest and I need some kind of silhouette data to work on some VJ ideas of mine, so this is a stopgap project until I can get my hands on a Kinect V2.
 >
